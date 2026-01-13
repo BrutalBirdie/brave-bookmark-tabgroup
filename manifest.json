@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Tab Group Manager",
+  "version": "1.0.0",
+  "description": "Open bookmarks in specific tab groups. Edit bookmarks to assign them to tab groups.",
+  "permissions": [
+    "bookmarks",
+    "tabs",
+    "tabGroups",
+    "storage",
+    "contextMenus"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "edit-bookmark-tabgroup": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "Edit bookmark tab group"
+    }
+  }
+}
