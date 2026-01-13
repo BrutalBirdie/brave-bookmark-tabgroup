@@ -63,25 +63,40 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       const bookmarks = await chrome.bookmarks.search({ url: tab.url });
       if (bookmarks && bookmarks.length > 0) {
         const bookmark = bookmarks[0];
-        const assignedTabGroupId = bookmarkTabGroups[bookmark.id];
+        const tabGroupInfo = bookmarkTabGroups[bookmark.id];
         
-        if (assignedTabGroupId) {
+        if (tabGroupInfo) {
           // Check if tab is already in a group (groupId is -1 if not in a group)
           if (!tab.groupId || tab.groupId === -1) {
-            // Move tab to assigned group
-            try {
-              // Verify group exists
-              await chrome.tabGroups.get(assignedTabGroupId);
-              await chrome.tabs.group({ tabIds: tabId, groupId: assignedTabGroupId });
-            } catch (error) {
-              // Group might not exist, create new one
+            let targetGroupId = null;
+            
+            // Handle both old format (ID) and new format (title/color)
+            if (typeof tabGroupInfo === 'object' && tabGroupInfo.title !== undefined) {
+              // New format: find or create by title and color
+              const groupResult = await findOrCreateTabGroup(tabGroupInfo.title, tabGroupInfo.color);
+              
+              if (groupResult && typeof groupResult === 'object' && groupResult.create) {
+                // Need to create group
+                targetGroupId = await chrome.tabs.group({ tabIds: tabId });
+                if (groupResult.title) {
+                  await chrome.tabGroups.update(targetGroupId, {
+                    title: groupResult.title,
+                    color: groupResult.color
+                  });
+                }
+              } else if (groupResult) {
+                targetGroupId = groupResult;
+                await chrome.tabs.group({ tabIds: tabId, groupId: targetGroupId });
+              }
+            } else if (typeof tabGroupInfo === 'number') {
+              // Old format: try to use stored ID
               try {
-                const newGroupId = await chrome.tabs.group({ tabIds: tabId });
-                bookmarkTabGroups[bookmark.id] = newGroupId;
-                await chrome.storage.local.set({ bookmarkTabGroups: bookmarkTabGroups });
-              } catch (groupError) {
-                // Tab might already be in a group, ignore
-                console.debug('Could not create group:', groupError);
+                await chrome.tabGroups.get(tabGroupInfo);
+                targetGroupId = tabGroupInfo;
+                await chrome.tabs.group({ tabIds: tabId, groupId: targetGroupId });
+              } catch (error) {
+                // Group doesn't exist, ignore
+                console.debug('Stored tab group ID no longer exists:', error);
               }
             }
           }
@@ -94,30 +109,84 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
+// Helper function to find or create a tab group by title and color
+async function findOrCreateTabGroup(title, color) {
+  try {
+    // First, try to find an existing group with matching title and color
+    const allGroups = await chrome.tabGroups.query({});
+    const matchingGroup = allGroups.find(g => 
+      (g.title === title || (!g.title && !title)) && 
+      g.color === color
+    );
+    
+    if (matchingGroup) {
+      return matchingGroup.id;
+    }
+    
+    // Group doesn't exist, we'll need to create it when we have a tab
+    // Return a marker object to indicate we need to create it
+    return { create: true, title: title, color: color };
+  } catch (error) {
+    console.error('Error finding tab group:', error);
+    return null;
+  }
+}
+
 // Function to open bookmark in its assigned tab group
 async function openBookmarkInTabGroup(bookmarkId, url) {
   try {
     // Get the tab group assignment for this bookmark
     const result = await chrome.storage.local.get(['bookmarkTabGroups']);
     const bookmarkTabGroups = result.bookmarkTabGroups || {};
-    const tabGroupId = bookmarkTabGroups[bookmarkId];
+    const tabGroupInfo = bookmarkTabGroups[bookmarkId];
 
-    if (tabGroupId) {
-      // Create a new tab
+    if (tabGroupInfo) {
+      // Create a new tab first
       const tab = await chrome.tabs.create({ url: url, active: false });
       
-      // Get the tab group details
-      const group = await chrome.tabGroups.get(tabGroupId);
+      // tabGroupInfo can be either:
+      // - An object with {title, color} (new format)
+      // - A number (old format - tab group ID, for backward compatibility)
       
-      if (group) {
-        // Add the tab to the existing group
-        await chrome.tabs.group({ tabIds: tab.id, groupId: tabGroupId });
-      } else {
-        // Group doesn't exist, create a new one
-        const newGroupId = await chrome.tabs.group({ tabIds: tab.id });
-        // Update storage with the new group ID
-        bookmarkTabGroups[bookmarkId] = newGroupId;
-        await chrome.storage.local.set({ bookmarkTabGroups: bookmarkTabGroups });
+      let targetGroupId = null;
+      
+      if (typeof tabGroupInfo === 'object' && tabGroupInfo.title !== undefined) {
+        // New format: find or create group by title and color
+        const groupResult = await findOrCreateTabGroup(tabGroupInfo.title, tabGroupInfo.color);
+        
+        if (groupResult && typeof groupResult === 'object' && groupResult.create) {
+          // Need to create a new group
+          targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+          // Set the title and color
+          if (groupResult.title) {
+            await chrome.tabGroups.update(targetGroupId, { 
+              title: groupResult.title,
+              color: groupResult.color 
+            });
+          }
+        } else if (groupResult) {
+          // Found existing group
+          targetGroupId = groupResult;
+          await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
+        } else {
+          // Fallback: create group without assignment
+          targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+        }
+      } else if (typeof tabGroupInfo === 'number') {
+        // Old format: try to use the stored ID
+        try {
+          const group = await chrome.tabGroups.get(tabGroupInfo);
+          if (group) {
+            targetGroupId = tabGroupInfo;
+            await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
+          } else {
+            // Group doesn't exist, create new one
+            targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+          }
+        } catch (error) {
+          // Group ID invalid, create new one
+          targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+        }
       }
     } else {
       // No tab group assigned, open normally
@@ -137,17 +206,89 @@ async function openBookmarkFolderInTabGroups(folderId) {
     const result = await chrome.storage.local.get(['bookmarkTabGroups']);
     const bookmarkTabGroups = result.bookmarkTabGroups || {};
     
+    // Check if the folder itself has a tab group assignment
+    const folderTabGroupInfo = bookmarkTabGroups[folderId];
+    
     for (const bookmark of bookmarks) {
       if (bookmark.url) {
         // It's a bookmark (not a folder)
-        await openBookmarkInTabGroup(bookmark.id, bookmark.url);
+        // Check if this specific bookmark has an assignment, otherwise use folder assignment
+        const bookmarkTabGroupInfo = bookmarkTabGroups[bookmark.id] || folderTabGroupInfo;
+        
+        if (bookmarkTabGroupInfo) {
+          // Open bookmark with the appropriate tab group info
+          // We'll pass the tab group info directly instead of relying on storage
+          await openBookmarkInTabGroupWithInfo(bookmark.url, bookmarkTabGroupInfo);
+        } else {
+          // No assignment, open normally
+          await chrome.tabs.create({ url: bookmark.url });
+        }
       } else {
         // It's a folder, recursively open its children
+        // Pass down the folder's tab group info if it exists
+        const childFolderTabGroupInfo = bookmarkTabGroups[bookmark.id] || folderTabGroupInfo;
+        if (childFolderTabGroupInfo) {
+          // Temporarily store it for the recursive call
+          bookmarkTabGroups[bookmark.id] = childFolderTabGroupInfo;
+        }
         await openBookmarkFolderInTabGroups(bookmark.id);
       }
     }
   } catch (error) {
     console.error('Error opening bookmark folder:', error);
+  }
+}
+
+// Helper function to open a bookmark with specific tab group info
+async function openBookmarkInTabGroupWithInfo(url, tabGroupInfo) {
+  try {
+    // Create a new tab first
+    const tab = await chrome.tabs.create({ url: url, active: false });
+    
+    let targetGroupId = null;
+    
+    if (typeof tabGroupInfo === 'object' && tabGroupInfo.title !== undefined) {
+      // New format: find or create group by title and color
+      const groupResult = await findOrCreateTabGroup(tabGroupInfo.title, tabGroupInfo.color);
+      
+      if (groupResult && typeof groupResult === 'object' && groupResult.create) {
+        // Need to create a new group
+        targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+        // Set the title and color
+        if (groupResult.title) {
+          await chrome.tabGroups.update(targetGroupId, { 
+            title: groupResult.title,
+            color: groupResult.color 
+          });
+        }
+      } else if (groupResult) {
+        // Found existing group
+        targetGroupId = groupResult;
+        await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
+      } else {
+        // Fallback: create group without assignment
+        targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+      }
+    } else if (typeof tabGroupInfo === 'number') {
+      // Old format: try to use the stored ID
+      try {
+        const group = await chrome.tabGroups.get(tabGroupInfo);
+        if (group) {
+          targetGroupId = tabGroupInfo;
+          await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
+        } else {
+          // Group doesn't exist, create new one
+          targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+        }
+      } catch (error) {
+        // Group ID invalid, create new one
+        targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
+      }
+    }
+  } catch (error) {
+    console.error('Error opening bookmark in tab group:', error);
+    // Fallback to normal tab creation
+    chrome.tabs.create({ url: url });
   }
 }
 
@@ -175,10 +316,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'saveBookmarkTabGroup') {
-    chrome.storage.local.get(['bookmarkTabGroups'], (result) => {
+    chrome.storage.local.get(['bookmarkTabGroups'], async (result) => {
       const bookmarkTabGroups = result.bookmarkTabGroups || {};
       if (request.tabGroupId) {
-        bookmarkTabGroups[request.bookmarkId] = request.tabGroupId;
+        // Get the tab group details to store title and color (persistent identifiers)
+        try {
+          const group = await chrome.tabGroups.get(request.tabGroupId);
+          if (group) {
+            // Store by title and color instead of ID (persistent across sessions)
+            bookmarkTabGroups[request.bookmarkId] = {
+              title: group.title || '',
+              color: group.color || 'grey'
+            };
+          } else {
+            // Fallback: store the ID if we can't get group details
+            bookmarkTabGroups[request.bookmarkId] = request.tabGroupId;
+          }
+        } catch (error) {
+          // If group doesn't exist, try to get it from the request if provided
+          if (request.tabGroupTitle !== undefined) {
+            bookmarkTabGroups[request.bookmarkId] = {
+              title: request.tabGroupTitle || '',
+              color: request.tabGroupColor || 'grey'
+            };
+          } else {
+            bookmarkTabGroups[request.bookmarkId] = request.tabGroupId;
+          }
+        }
       } else {
         delete bookmarkTabGroups[request.bookmarkId];
       }
@@ -190,9 +354,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'getBookmarkTabGroup') {
-    chrome.storage.local.get(['bookmarkTabGroups'], (result) => {
+    chrome.storage.local.get(['bookmarkTabGroups'], async (result) => {
       const bookmarkTabGroups = result.bookmarkTabGroups || {};
-      sendResponse({ tabGroupId: bookmarkTabGroups[request.bookmarkId] || null });
+      const tabGroupInfo = bookmarkTabGroups[request.bookmarkId];
+      
+      if (!tabGroupInfo) {
+        sendResponse({ tabGroupId: null, tabGroupInfo: null });
+        return;
+      }
+      
+      // If it's the new format (object with title/color), find matching group
+      if (typeof tabGroupInfo === 'object' && tabGroupInfo.title !== undefined) {
+        try {
+          const allGroups = await chrome.tabGroups.query({});
+          const matchingGroup = allGroups.find(g => 
+            (g.title === tabGroupInfo.title || (!g.title && !tabGroupInfo.title)) && 
+            g.color === tabGroupInfo.color
+          );
+          
+          if (matchingGroup) {
+            sendResponse({ 
+              tabGroupId: matchingGroup.id,
+              tabGroupInfo: tabGroupInfo 
+            });
+          } else {
+            // Group doesn't exist yet, return the info so UI can show it
+            sendResponse({ 
+              tabGroupId: null,
+              tabGroupInfo: tabGroupInfo 
+            });
+          }
+        } catch (error) {
+          sendResponse({ 
+            tabGroupId: null,
+            tabGroupInfo: tabGroupInfo 
+          });
+        }
+      } else {
+        // Old format: just return the ID
+        sendResponse({ 
+          tabGroupId: tabGroupInfo,
+          tabGroupInfo: null 
+        });
+      }
     });
     return true;
   }

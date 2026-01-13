@@ -140,9 +140,27 @@ function loadCurrentAssignment() {
     action: 'getBookmarkTabGroup',
     bookmarkId: currentBookmarkId
   }, (response) => {
-    if (response && response.tabGroupId) {
+    if (response) {
       const select = document.getElementById('tabGroupSelect');
-      select.value = response.tabGroupId;
+      
+      // Try to match by ID first
+      if (response.tabGroupId) {
+        select.value = response.tabGroupId;
+      } else if (response.tabGroupInfo) {
+        // Group doesn't exist yet, but we have the info
+        // Try to find a matching group by title and color
+        const matchingGroup = allTabGroups.find(g => 
+          (g.title === response.tabGroupInfo.title || (!g.title && !response.tabGroupInfo.title)) &&
+          g.color === response.tabGroupInfo.color
+        );
+        
+        if (matchingGroup) {
+          select.value = matchingGroup.id;
+        } else {
+          // Show a message that the group needs to be recreated
+          console.log('Tab group not found:', response.tabGroupInfo);
+        }
+      }
     }
   });
 }
@@ -157,15 +175,20 @@ function saveAssignment() {
   const tabGroupId = document.getElementById('tabGroupSelect').value;
   const tabGroupIdInt = tabGroupId ? parseInt(tabGroupId) : null;
   
+  // Get tab group details to store title and color
+  const selectedGroup = tabGroupIdInt ? allTabGroups.find(g => g.id === tabGroupIdInt) : null;
+  
   chrome.runtime.sendMessage({
     action: 'saveBookmarkTabGroup',
     bookmarkId: currentBookmarkId,
-    tabGroupId: tabGroupIdInt
+    tabGroupId: tabGroupIdInt,
+    tabGroupTitle: selectedGroup ? selectedGroup.title : null,
+    tabGroupColor: selectedGroup ? selectedGroup.color : null
   }, (response) => {
     if (response && response.success) {
       const bookmark = allBookmarks.find(b => b.id === currentBookmarkId);
-      const groupName = tabGroupIdInt 
-        ? allTabGroups.find(g => g.id === tabGroupIdInt)?.title || 'selected group'
+      const groupName = selectedGroup 
+        ? (selectedGroup.title || 'Untitled') + ' (' + getColorName(selectedGroup.color) + ')'
         : 'default';
       showStatus(`Saved! "${bookmark.title}" will open in ${groupName}`, 'success');
     } else {
