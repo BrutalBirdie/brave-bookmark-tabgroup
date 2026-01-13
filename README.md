@@ -2,6 +2,14 @@
 
 A Brave Browser extension that allows you to assign bookmarks and bookmark folders to specific tab groups. When you open a bookmark, it will automatically open in its assigned tab group.
 
+## Disclaimer
+
+> [!WARNING]  
+> This extension was generated with the [Cursor](https://cursor.com/) AI IDE.
+> I have no knowledge about browser extension development and simply wanted/needed this feature.
+> Do not expect any support for this project.
+
+
 ## Features
 
 - **Assign Tab Groups to Bookmarks**: Edit any bookmark or bookmark folder to assign it to a specific tab group
