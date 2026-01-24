@@ -74,8 +74,10 @@ function loadTabGroups() {
     allTabGroups = groups;
     const select = document.getElementById('tabGroupSelect');
     const currentValue = select.value;
+    const isCreatingNew = select.value === '__create_new__';
     
     select.innerHTML = '<option value="">-- No tab group (default) --</option>';
+    select.appendChild(new Option('+ Create New Tab Group', '__create_new__'));
     
     groups.forEach(group => {
       const option = document.createElement('option');
@@ -86,7 +88,10 @@ function loadTabGroups() {
     });
     
     // Restore selection if it still exists
-    if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
+    if (isCreatingNew) {
+      select.value = '__create_new__';
+      handleTabGroupSelect({ target: select });
+    } else if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
       select.value = currentValue;
     }
   });
@@ -129,7 +134,17 @@ function handleBookmarkSelect(event) {
 
 // Handle tab group selection
 function handleTabGroupSelect(event) {
-  // Visual feedback can be added here if needed
+  const select = event.target;
+  const createSection = document.getElementById('createGroupSection');
+  
+  if (select.value === '__create_new__') {
+    createSection.style.display = 'block';
+    document.getElementById('newGroupName').focus();
+  } else {
+    createSection.style.display = 'none';
+    document.getElementById('newGroupName').value = '';
+    document.getElementById('newGroupColor').value = 'grey';
+  }
 }
 
 // Load current tab group assignment for selected bookmark
@@ -173,6 +188,56 @@ function saveAssignment() {
   }
   
   const tabGroupId = document.getElementById('tabGroupSelect').value;
+  
+  // Check if creating a new tab group
+  if (tabGroupId === '__create_new__') {
+    const groupName = document.getElementById('newGroupName').value.trim();
+    const groupColor = document.getElementById('newGroupColor').value;
+    
+    if (!groupName) {
+      showStatus('Please enter a tab group name', 'error');
+      document.getElementById('newGroupName').focus();
+      return;
+    }
+    
+    // Create the new tab group
+    chrome.runtime.sendMessage({
+      action: 'createTabGroup',
+      title: groupName,
+      color: groupColor
+    }, (response) => {
+      if (response && response.success && response.tabGroupId) {
+        // Now save the assignment with the new group
+        chrome.runtime.sendMessage({
+          action: 'saveBookmarkTabGroup',
+          bookmarkId: currentBookmarkId,
+          tabGroupId: response.tabGroupId,
+          tabGroupTitle: groupName,
+          tabGroupColor: groupColor
+        }, (saveResponse) => {
+          if (saveResponse && saveResponse.success) {
+            const bookmark = allBookmarks.find(b => b.id === currentBookmarkId);
+            showStatus(`Saved! "${bookmark.title}" will open in "${groupName}"`, 'success');
+            // Reload tab groups and select the new one
+            setTimeout(() => {
+              loadTabGroups();
+              setTimeout(() => {
+                document.getElementById('tabGroupSelect').value = response.tabGroupId;
+                document.getElementById('createGroupSection').style.display = 'none';
+              }, 100);
+            }, 200);
+          } else {
+            showStatus('Error saving assignment', 'error');
+          }
+        });
+      } else {
+        showStatus('Error creating tab group: ' + (response?.error || 'Unknown error'), 'error');
+      }
+    });
+    return;
+  }
+  
+  // Existing tab group selected
   const tabGroupIdInt = tabGroupId ? parseInt(tabGroupId) : null;
   
   // Get tab group details to store title and color

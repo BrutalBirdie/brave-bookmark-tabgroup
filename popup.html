@@ -25,9 +25,32 @@
       <div class="tabgroup-selector">
         <select id="tabGroupSelect" class="tabgroup-select">
           <option value="">-- No tab group (default) --</option>
+          <option value="__create_new__">+ Create New Tab Group</option>
         </select>
         <button id="refreshGroupsBtn" class="btn btn-secondary" title="Refresh tab groups">↻</button>
       </div>
+      
+      <div id="createGroupSection" class="create-group-section" style="display: none;">
+        <div class="form-group">
+          <label for="newGroupName">Tab Group Name:</label>
+          <input type="text" id="newGroupName" class="form-input" placeholder="Enter tab group name" maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="newGroupColor">Color:</label>
+          <select id="newGroupColor" class="form-input">
+            <option value="grey">Grey</option>
+            <option value="blue">Blue</option>
+            <option value="red">Red</option>
+            <option value="yellow">Yellow</option>
+            <option value="green">Green</option>
+            <option value="pink">Pink</option>
+            <option value="purple">Purple</option>
+            <option value="cyan">Cyan</option>
+            <option value="orange">Orange</option>
+          </select>
+        </div>
+      </div>
+      
       <div class="actions">
         <button id="saveBtn" class="btn btn-primary">Save Assignment</button>
         <button id="clearBtn" class="btn btn-secondary">Clear Assignment</button>
