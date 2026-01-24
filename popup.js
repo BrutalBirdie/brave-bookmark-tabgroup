@@ -25,7 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Event listeners
   document.getElementById('bookmarkSelect').addEventListener('change', handleBookmarkSelect);
-  document.getElementById('tabGroupSelect').addEventListener('change', handleTabGroupSelect);
+  document.getElementById('tabGroupSelect').addEventListener('change', (e) => {
+    handleTabGroupSelect(e);
+    updateSelectTitle(e.target);
+  });
   document.getElementById('saveBtn').addEventListener('click', saveAssignment);
   document.getElementById('clearBtn').addEventListener('click', clearAssignment);
   document.getElementById('refreshBtn').addEventListener('click', loadBookmarks);
@@ -100,11 +103,20 @@ function loadTabGroups() {
     }
     if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
       select.value = currentValue;
+      updateSelectTitle(select);
     }
     
     // Re-apply stored assignment when group was deleted (adds __stored__ option if needed)
     if (currentBookmarkId) loadCurrentAssignment();
   });
+}
+
+// Update select title (tooltip) with full option text so hover shows full value when truncated
+function updateSelectTitle(select) {
+  if (!select || select.id !== 'tabGroupSelect') return;
+  const opt = select.selectedOptions?.[0];
+  const full = opt?.dataset?.fullText ?? opt?.textContent ?? '';
+  select.title = full;
 }
 
 // Get color name from color enum
@@ -176,6 +188,7 @@ function loadCurrentAssignment() {
     
     if (!response) {
       select.value = '';
+      updateSelectTitle(select);
       return;
     }
     
@@ -184,6 +197,7 @@ function loadCurrentAssignment() {
       const exists = allTabGroups.some(g => g.id === response.tabGroupId);
       if (exists) {
         select.value = response.tabGroupId;
+        updateSelectTitle(select);
         return;
       }
     }
@@ -198,19 +212,25 @@ function loadCurrentAssignment() {
       
       if (matchingGroup) {
         select.value = matchingGroup.id;
+        updateSelectTitle(select);
         return;
       }
       
       // Group deleted: add option for saved config and select it
       const colorName = getColorName(info.color);
-      const label = (info.title || 'Untitled') + ' (' + colorName + ') — group closed, recreated when opening';
+      const shortLabel = (info.title || 'Untitled') + ' (' + colorName + ') • saved';
+      const fullLabel = (info.title || 'Untitled') + ' (' + colorName + ') — group closed, recreated when opening';
       const value = '__stored__|' + (info.title || '') + '|' + (info.color || 'grey');
-      const opt = new Option(label, value);
+      const opt = new Option(shortLabel, value);
+      opt.dataset.fullText = fullLabel;
       select.appendChild(opt);
       select.value = value;
-    } else {
-      select.value = '';
+      updateSelectTitle(select);
+      return;
     }
+    
+    select.value = '';
+    updateSelectTitle(select);
   });
 }
 
@@ -262,7 +282,9 @@ function saveAssignment() {
             setTimeout(() => {
               loadTabGroups();
               setTimeout(() => {
-                document.getElementById('tabGroupSelect').value = response.tabGroupId;
+                const tgSelect = document.getElementById('tabGroupSelect');
+                tgSelect.value = response.tabGroupId;
+                updateSelectTitle(tgSelect);
                 document.getElementById('createGroupSection').style.display = 'none';
               }, 100);
             }, 200);
@@ -318,6 +340,8 @@ function clearAssignment() {
       select.remove(i);
     }
   }
+  
+  updateSelectTitle(select);
   
   chrome.runtime.sendMessage({
     action: 'saveBookmarkTabGroup',
