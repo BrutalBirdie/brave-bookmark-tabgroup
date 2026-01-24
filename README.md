@@ -1,6 +1,6 @@
-# Bookmark Tab Group Manager for Brave Browser
+# Bookmark Tab Group Manager Browser Extension
 
-A Brave Browser extension that allows you to assign bookmarks and bookmark folders to specific tab groups. When you open a bookmark, it will automatically open in its assigned tab group.
+A Browser extension that allows you to assign bookmarks and bookmark folders to specific tab groups. When you open a bookmark, it will automatically open in its assigned tab group.
 
 ## Disclaimer
 
@@ -23,10 +23,10 @@ A Brave Browser extension that allows you to assign bookmarks and bookmark folde
 
 ## Installation
 
-### From Source (Brave / Chrome / Chromium Bases Browsers)
+### From Source (Chromium Bases Browsers)
 
 1. Clone or download this repository
-2. Open Brave Browser
+2. Open Chromium Browser
 3. Navigate to `chrome://extensions/`
 4. Enable "Developer mode" (toggle in the top right)
 5. Click "Load unpacked"
@@ -45,7 +45,7 @@ The extension works in **Firefox 138+** (tab groups API). To build an installabl
 3. The built extension is created in `web-ext-artifacts/` as a `.zip` file.
 4. In Firefox, go to `about:debugging` → **This Firefox** → **Load Temporary Add-on** → choose the `.zip` from `web-ext-artifacts/`, or **about:addons** → gear icon → **Install Add-on From File** → select the `.zip` for a permanent install.
 
-The Firefox build uses `manifest.firefox.json` (same content as `manifest.json` but with `background.scripts` instead of `background.service_worker`), because Firefox does not yet support MV3 service workers. The build script swaps manifests temporarily; `manifest.json` remains the Chrome/Brave version for normal development. `browser_specific_settings` is ignored by Chromium-based browsers.
+The Firefox build uses `manifest.firefox.json` (same content as `manifest.json` but with `background.scripts` instead of `background.service_worker`), because Firefox does not yet support MV3 service workers. The build script swaps manifests temporarily; `manifest.json` remains the Chromium version for normal development. `browser_specific_settings` is ignored by Chromium-based browsers.
 
 **If you get “This add-on could not be installed because it appears to be corrupt”:** The build excludes dev artifacts (`.pem`, `.crx`, `package.json`, etc.) via `web-ext-config.cjs`. Use the zip from `web-ext-artifacts/` after `npm run build:firefox`, and **Firefox 138 or newer**. You can also try **Load Temporary Add-on** or set `xpinstall.signatures.required` to `false` in `about:config` (Developer Edition).
 
@@ -89,48 +89,18 @@ This extension requires the following permissions:
 
 ## Development
 
-### Project Structure
-
-```
-brave-bookmark-tabgroup/
-├── manifest.json       # Extension manifest
-├── background.js       # Service worker for background tasks
-├── popup.html         # Extension popup UI
-├── popup.css          # Popup styles
-├── popup.js           # Popup functionality
-├── icons/             # Extension icons (create these)
-└── README.md          # This file
-```
-
-### Creating Icons
-
-You'll need to create icon files in the `icons/` directory:
-- `icon16.png` (16x16 pixels)
-- `icon48.png` (48x48 pixels)
-- `icon128.png` (128x128 pixels)
-
-**Easy Method**: Open `create-icons.html` in your browser and click "Generate All Icons" - it will automatically create and download all required icon files.
-
-Alternatively, you can use any image editor or online icon generator to create these.
-
-## Limitations
-
-- Tab groups must exist before bookmarks can be assigned to them
-- If a tab group is deleted, bookmarks assigned to it will need to be reassigned
-- Automatic assignment from bookmark bar clicks may not work perfectly in all scenarios (use the extension popup for guaranteed behavior)
-
 ## Troubleshooting
 
 - **Bookmarks not opening in assigned groups**: Make sure the tab group is still assigned. Try refreshing the tab groups list in the popup.
 - **Context menu not appearing**: Make sure the extension is enabled and reload it if necessary.
-- **Popup not opening**: Check that the extension is enabled in `brave://extensions/`
+- **Popup not opening**: Check that the extension is enabled in `chrome://extensions/`
 
 ### Debugging bookmark-bar / redirect issues
 
 If a bookmark (e.g. one that redirects) opens **outside** the assigned tab group when clicked from the bookmark bar, but works when using the extension’s “Open Selected Folder”:
 
 1. Open `background.js` and set `DEBUG = true` at the top.
-2. Reload the extension (`brave://extensions/` → your extension → reload).
+2. Reload the extension (`chrome://extensions/` → your extension → reload).
 3. Open **Inspect views: service worker** (link under the extension) to open the DevTools console.
 4. Reproduce: click the problematic bookmark from the bookmark bar.
 5. Watch the `[BTG]` logs. They show:
