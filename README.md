@@ -38,13 +38,6 @@ A Brave Browser extension that allows you to assign bookmarks and bookmark folde
 3. Choose a tab group from the "Tab Group Assignment" dropdown
 4. Click "Save Assignment"
 
-### Using Context Menu
-
-1. Right-click on any bookmark in the bookmark bar
-2. Select "Edit Tab Group Assignment"
-3. The extension popup will open with that bookmark pre-selected
-4. Choose a tab group and save
-
 ### Opening Bookmarks
 
 - **Through Extension**: Select a bookmark in the popup and click "Open Selected Bookmark" or "Open Selected Folder"
@@ -71,7 +64,6 @@ This extension requires the following permissions:
 - **tabs**: To create tabs and manage tab groups
 - **tabGroups**: To access and manage tab groups
 - **storage**: To save bookmark-to-tab-group assignments
-- **contextMenus**: To add context menu options for bookmarks
 
 ## Development
 
@@ -107,9 +99,24 @@ Alternatively, you can use any image editor or online icon generator to create t
 
 ## Troubleshooting
 
-- **Bookmarks not opening in assigned groups**: Make sure the tab group still exists. Try refreshing the tab groups list in the popup.
+- **Bookmarks not opening in assigned groups**: Make sure the tab group is still assigned. Try refreshing the tab groups list in the popup.
 - **Context menu not appearing**: Make sure the extension is enabled and reload it if necessary.
 - **Popup not opening**: Check that the extension is enabled in `brave://extensions/`
+
+### Debugging bookmark-bar / redirect issues
+
+If a bookmark (e.g. one that redirects) opens **outside** the assigned tab group when clicked from the bookmark bar, but works when using the extension’s “Open Selected Folder”:
+
+1. Open `background.js` and set `DEBUG = true` at the top.
+2. Reload the extension (`brave://extensions/` → your extension → reload).
+3. Open **Inspect views: service worker** (link under the extension) to open the DevTools console.
+4. Reproduce: click the problematic bookmark from the bookmark bar.
+5. Watch the `[BTG]` logs. They show:
+   - `onCreated` / `onUpdated`: when we see the tab and capture its URL
+   - `captureInitialUrl`: whether we stored or skipped the URL (and why)
+   - `assignTabToBookmarkGroup`: lookup URL, bookmark search result, assignment, and any errors
+
+Share the relevant `[BTG]` log lines (or a screenshot of the console) so we can see where it fails. When done, set `DEBUG = false` and reload.
 
 ## License
 

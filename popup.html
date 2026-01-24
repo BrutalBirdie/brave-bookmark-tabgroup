@@ -25,9 +25,41 @@
       <div class="tabgroup-selector">
         <select id="tabGroupSelect" class="tabgroup-select">
           <option value="">-- No tab group (default) --</option>
+          <option value="__create_new__">+ Create New Tab Group</option>
         </select>
         <button id="refreshGroupsBtn" class="btn btn-secondary" title="Refresh tab groups">↻</button>
       </div>
+      
+      <div id="createGroupSection" class="create-group-section" style="display: none;">
+        <div class="form-group">
+          <label for="newGroupName">Tab Group Name:</label>
+          <input type="text" id="newGroupName" class="form-input" placeholder="Enter tab group name" maxlength="50">
+        </div>
+        <div class="form-group">
+          <span class="color-picker-label">Color:</span>
+          <div id="newGroupColorPicker" class="color-picker" role="group" aria-label="Tab group color">
+            <input type="radio" name="newGroupColor" id="color-grey" value="grey" checked>
+            <label for="color-grey" class="color-chip" data-color="grey" title="Grey"></label>
+            <input type="radio" name="newGroupColor" id="color-blue" value="blue">
+            <label for="color-blue" class="color-chip" data-color="blue" title="Blue"></label>
+            <input type="radio" name="newGroupColor" id="color-red" value="red">
+            <label for="color-red" class="color-chip" data-color="red" title="Red"></label>
+            <input type="radio" name="newGroupColor" id="color-yellow" value="yellow">
+            <label for="color-yellow" class="color-chip" data-color="yellow" title="Yellow"></label>
+            <input type="radio" name="newGroupColor" id="color-green" value="green">
+            <label for="color-green" class="color-chip" data-color="green" title="Green"></label>
+            <input type="radio" name="newGroupColor" id="color-pink" value="pink">
+            <label for="color-pink" class="color-chip" data-color="pink" title="Pink"></label>
+            <input type="radio" name="newGroupColor" id="color-purple" value="purple">
+            <label for="color-purple" class="color-chip" data-color="purple" title="Purple"></label>
+            <input type="radio" name="newGroupColor" id="color-cyan" value="cyan">
+            <label for="color-cyan" class="color-chip" data-color="cyan" title="Cyan"></label>
+            <input type="radio" name="newGroupColor" id="color-orange" value="orange">
+            <label for="color-orange" class="color-chip" data-color="orange" title="Orange"></label>
+          </div>
+        </div>
+      </div>
+      
       <div class="actions">
         <button id="saveBtn" class="btn btn-primary">Save Assignment</button>
         <button id="clearBtn" class="btn btn-secondary">Clear Assignment</button>

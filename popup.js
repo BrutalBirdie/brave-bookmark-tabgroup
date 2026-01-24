@@ -8,24 +8,13 @@ let currentBookmarkId = null;
 document.addEventListener('DOMContentLoaded', () => {
   loadBookmarks();
   loadTabGroups();
-  
-  // Check if opened from context menu
-  chrome.storage.local.get(['contextMenuBookmarkId'], (result) => {
-    if (result.contextMenuBookmarkId) {
-      // Pre-select the bookmark from context menu
-      setTimeout(() => {
-        const select = document.getElementById('bookmarkSelect');
-        select.value = result.contextMenuBookmarkId;
-        handleBookmarkSelect({ target: select });
-        // Clear the stored ID
-        chrome.storage.local.remove(['contextMenuBookmarkId']);
-      }, 500); // Wait for bookmarks to load
-    }
-  });
-  
+
   // Event listeners
   document.getElementById('bookmarkSelect').addEventListener('change', handleBookmarkSelect);
-  document.getElementById('tabGroupSelect').addEventListener('change', handleTabGroupSelect);
+  document.getElementById('tabGroupSelect').addEventListener('change', (e) => {
+    handleTabGroupSelect(e);
+    updateSelectTitle(e.target);
+  });
   document.getElementById('saveBtn').addEventListener('click', saveAssignment);
   document.getElementById('clearBtn').addEventListener('click', clearAssignment);
   document.getElementById('refreshBtn').addEventListener('click', loadBookmarks);
@@ -74,8 +63,10 @@ function loadTabGroups() {
     allTabGroups = groups;
     const select = document.getElementById('tabGroupSelect');
     const currentValue = select.value;
+    const isCreatingNew = select.value === '__create_new__';
     
     select.innerHTML = '<option value="">-- No tab group (default) --</option>';
+    select.appendChild(new Option('+ Create New Tab Group', '__create_new__'));
     
     groups.forEach(group => {
       const option = document.createElement('option');
@@ -86,10 +77,32 @@ function loadTabGroups() {
     });
     
     // Restore selection if it still exists
+    if (isCreatingNew) {
+      select.value = '__create_new__';
+      handleTabGroupSelect({ target: select });
+      return;
+    }
+    if (currentValue && currentValue.startsWith('__stored__|')) {
+      // Stored config (group deleted) — restore via loadCurrentAssignment
+      if (currentBookmarkId) loadCurrentAssignment();
+      return;
+    }
     if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
       select.value = currentValue;
+      updateSelectTitle(select);
     }
+    
+    // Re-apply stored assignment when group was deleted (adds __stored__ option if needed)
+    if (currentBookmarkId) loadCurrentAssignment();
   });
+}
+
+// Update select title (tooltip) with full option text so hover shows full value when truncated
+function updateSelectTitle(select) {
+  if (!select || select.id !== 'tabGroupSelect') return;
+  const opt = select.selectedOptions?.[0];
+  const full = opt?.dataset?.fullText ?? opt?.textContent ?? '';
+  select.title = full;
 }
 
 // Get color name from color enum
@@ -129,7 +142,18 @@ function handleBookmarkSelect(event) {
 
 // Handle tab group selection
 function handleTabGroupSelect(event) {
-  // Visual feedback can be added here if needed
+  const select = event.target;
+  const createSection = document.getElementById('createGroupSection');
+  
+  if (select.value === '__create_new__') {
+    createSection.style.display = 'block';
+    document.getElementById('newGroupName').focus();
+  } else {
+    createSection.style.display = 'none';
+    document.getElementById('newGroupName').value = '';
+    const greyRadio = document.getElementById('color-grey');
+    if (greyRadio) greyRadio.checked = true;
+  }
 }
 
 // Load current tab group assignment for selected bookmark
@@ -140,28 +164,71 @@ function loadCurrentAssignment() {
     action: 'getBookmarkTabGroup',
     bookmarkId: currentBookmarkId
   }, (response) => {
-    if (response) {
-      const select = document.getElementById('tabGroupSelect');
-      
-      // Try to match by ID first
-      if (response.tabGroupId) {
-        select.value = response.tabGroupId;
-      } else if (response.tabGroupInfo) {
-        // Group doesn't exist yet, but we have the info
-        // Try to find a matching group by title and color
-        const matchingGroup = allTabGroups.find(g => 
-          (g.title === response.tabGroupInfo.title || (!g.title && !response.tabGroupInfo.title)) &&
-          g.color === response.tabGroupInfo.color
-        );
-        
-        if (matchingGroup) {
-          select.value = matchingGroup.id;
-        } else {
-          // Show a message that the group needs to be recreated
-          console.log('Tab group not found:', response.tabGroupInfo);
-        }
+    const select = document.getElementById('tabGroupSelect');
+    
+    // Remove any existing "stored config" option (group deleted)
+    for (let i = select.options.length - 1; i >= 0; i--) {
+      if (select.options[i].value.startsWith('__stored__|')) {
+        select.remove(i);
       }
     }
+    
+    if (!response) {
+      select.value = '';
+      updateSelectTitle(select);
+      return;
+    }
+    
+    // Match by existing tab group ID
+    if (response.tabGroupId) {
+      const exists = allTabGroups.some(g => g.id === response.tabGroupId);
+      if (exists) {
+        select.value = response.tabGroupId;
+        updateSelectTitle(select);
+        return;
+      }
+    }
+    
+    // We have stored config (title/color)
+    if (response.tabGroupInfo) {
+      const info = response.tabGroupInfo;
+      const emptyConfig = (!info.title || info.title === '') && (!info.color || info.color === 'grey');
+      if (emptyConfig) {
+        select.value = '';
+        updateSelectTitle(select);
+        chrome.runtime.sendMessage({
+          action: 'saveBookmarkTabGroup',
+          bookmarkId: currentBookmarkId,
+          tabGroupId: null
+        });
+        return;
+      }
+      const matchingGroup = allTabGroups.find(g =>
+        (g.title === info.title || (!g.title && !info.title)) &&
+        g.color === info.color
+      );
+      
+      if (matchingGroup) {
+        select.value = matchingGroup.id;
+        updateSelectTitle(select);
+        return;
+      }
+      
+      // Group deleted: add option for saved config and select it
+      const colorName = getColorName(info.color);
+      const shortLabel = (info.title || 'Untitled') + ' (' + colorName + ') • saved';
+      const fullLabel = (info.title || 'Untitled') + ' (' + colorName + ') — group closed, recreated when opening';
+      const value = '__stored__|' + (info.title || '') + '|' + (info.color || 'grey');
+      const opt = new Option(shortLabel, value);
+      opt.dataset.fullText = fullLabel;
+      select.appendChild(opt);
+      select.value = value;
+      updateSelectTitle(select);
+      return;
+    }
+    
+    select.value = '';
+    updateSelectTitle(select);
   });
 }
 
@@ -173,6 +240,51 @@ function saveAssignment() {
   }
   
   const tabGroupId = document.getElementById('tabGroupSelect').value;
+  
+  // Stored config (group deleted) — assignment already saved, nothing to do
+  if (tabGroupId.startsWith('__stored__|')) {
+    showStatus('Assignment unchanged. Bookmark will open in saved group when used.', 'success');
+    return;
+  }
+  
+  // Check if creating a new tab group
+  if (tabGroupId === '__create_new__') {
+    const groupName = document.getElementById('newGroupName').value.trim();
+    const groupColor = document.querySelector('input[name="newGroupColor"]:checked')?.value || 'grey';
+    
+    if (!groupName) {
+      showStatus('Please enter a tab group name', 'error');
+      document.getElementById('newGroupName').focus();
+      return;
+    }
+    
+    // Store as virtual group (title+color only). No tab/group created; group
+    // is created when the bookmark is opened, same as when a saved group was deleted.
+    chrome.runtime.sendMessage({
+      action: 'saveBookmarkTabGroup',
+      bookmarkId: currentBookmarkId,
+      tabGroupId: null,
+      tabGroupTitle: groupName,
+      tabGroupColor: groupColor
+    }, (response) => {
+      if (response && response.success) {
+        const bookmark = allBookmarks.find(b => b.id === currentBookmarkId);
+        showStatus(`Saved! "${bookmark.title}" will open in "${groupName}"`, 'success');
+        document.getElementById('createGroupSection').style.display = 'none';
+        document.getElementById('newGroupName').value = '';
+        const greyRadio = document.getElementById('color-grey');
+        if (greyRadio) greyRadio.checked = true;
+        const tgSelect = document.getElementById('tabGroupSelect');
+        tgSelect.value = '';
+        loadTabGroups();
+      } else {
+        showStatus('Error saving assignment', 'error');
+      }
+    });
+    return;
+  }
+  
+  // Existing tab group selected
   const tabGroupIdInt = tabGroupId ? parseInt(tabGroupId) : null;
   
   // Get tab group details to store title and color
@@ -204,7 +316,17 @@ function clearAssignment() {
     return;
   }
   
-  document.getElementById('tabGroupSelect').value = '';
+  const select = document.getElementById('tabGroupSelect');
+  select.value = '';
+  
+  // Remove any "stored config" option (group deleted) since we're clearing
+  for (let i = select.options.length - 1; i >= 0; i--) {
+    if (select.options[i].value.startsWith('__stored__|')) {
+      select.remove(i);
+    }
+  }
+  
+  updateSelectTitle(select);
   
   chrome.runtime.sendMessage({
     action: 'saveBookmarkTabGroup',

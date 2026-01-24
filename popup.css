@@ -13,6 +13,8 @@ body {
 
 .container {
   padding: 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 h1 {
@@ -35,6 +37,8 @@ h2 {
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bookmark-selector,
@@ -42,17 +46,23 @@ h2 {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bookmark-select,
 .tabgroup-select {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 13px;
   background: white;
   color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bookmark-select:focus,
@@ -60,6 +70,25 @@ h2 {
   outline: none;
   border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Optional: wrapping mode — full text visible, no truncation (add class tabgroup-select-wrap to select) */
+.tabgroup-select-wrap.tabgroup-select {
+  appearance: none;
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  min-height: 2.5em;
+  height: auto;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+.tabgroup-select-wrap.tabgroup-select option {
+  white-space: normal;
 }
 
 .btn {
@@ -160,6 +189,107 @@ h2 {
   flex-direction: column;
   gap: 8px;
 }
+
+.create-group-section {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Color picker — horizontal row of circles (Brave/Chrome tab group style) */
+.color-picker-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-picker input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.color-chip {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+  transition: border-color 0.15s, transform 0.15s;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.color-chip:hover {
+  transform: scale(1.1);
+}
+
+.color-chip:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+.color-picker input:checked + .color-chip {
+  border-color: #333;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #333;
+}
+
+.color-chip[data-color="grey"] { background: #9aa0a6; }
+.color-chip[data-color="blue"] { background: #8ab4f8; }
+.color-chip[data-color="red"] { background: #f28b82; }
+.color-chip[data-color="yellow"] { background: #fdd663; }
+.color-chip[data-color="green"] { background: #81c995; }
+.color-chip[data-color="pink"] { background: #f8b4d9; }
+.color-chip[data-color="purple"] { background: #d7aefb; }
+.color-chip[data-color="cyan"] { background: #78d9ec; }
+.color-chip[data-color="orange"] { background: #fcad70; }
 
 /* Loading state */
 .loading {
