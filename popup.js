@@ -91,9 +91,19 @@ function loadTabGroups() {
     if (isCreatingNew) {
       select.value = '__create_new__';
       handleTabGroupSelect({ target: select });
-    } else if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
+      return;
+    }
+    if (currentValue && currentValue.startsWith('__stored__|')) {
+      // Stored config (group deleted) — restore via loadCurrentAssignment
+      if (currentBookmarkId) loadCurrentAssignment();
+      return;
+    }
+    if (currentValue && groups.find(g => g.id === parseInt(currentValue))) {
       select.value = currentValue;
     }
+    
+    // Re-apply stored assignment when group was deleted (adds __stored__ option if needed)
+    if (currentBookmarkId) loadCurrentAssignment();
   });
 }
 
@@ -155,27 +165,51 @@ function loadCurrentAssignment() {
     action: 'getBookmarkTabGroup',
     bookmarkId: currentBookmarkId
   }, (response) => {
-    if (response) {
-      const select = document.getElementById('tabGroupSelect');
-      
-      // Try to match by ID first
-      if (response.tabGroupId) {
-        select.value = response.tabGroupId;
-      } else if (response.tabGroupInfo) {
-        // Group doesn't exist yet, but we have the info
-        // Try to find a matching group by title and color
-        const matchingGroup = allTabGroups.find(g => 
-          (g.title === response.tabGroupInfo.title || (!g.title && !response.tabGroupInfo.title)) &&
-          g.color === response.tabGroupInfo.color
-        );
-        
-        if (matchingGroup) {
-          select.value = matchingGroup.id;
-        } else {
-          // Show a message that the group needs to be recreated
-          console.log('Tab group not found:', response.tabGroupInfo);
-        }
+    const select = document.getElementById('tabGroupSelect');
+    
+    // Remove any existing "stored config" option (group deleted)
+    for (let i = select.options.length - 1; i >= 0; i--) {
+      if (select.options[i].value.startsWith('__stored__|')) {
+        select.remove(i);
       }
+    }
+    
+    if (!response) {
+      select.value = '';
+      return;
+    }
+    
+    // Match by existing tab group ID
+    if (response.tabGroupId) {
+      const exists = allTabGroups.some(g => g.id === response.tabGroupId);
+      if (exists) {
+        select.value = response.tabGroupId;
+        return;
+      }
+    }
+    
+    // We have stored config (title/color)
+    if (response.tabGroupInfo) {
+      const info = response.tabGroupInfo;
+      const matchingGroup = allTabGroups.find(g =>
+        (g.title === info.title || (!g.title && !info.title)) &&
+        g.color === info.color
+      );
+      
+      if (matchingGroup) {
+        select.value = matchingGroup.id;
+        return;
+      }
+      
+      // Group deleted: add option for saved config and select it
+      const colorName = getColorName(info.color);
+      const label = (info.title || 'Untitled') + ' (' + colorName + ') — group closed, recreated when opening';
+      const value = '__stored__|' + (info.title || '') + '|' + (info.color || 'grey');
+      const opt = new Option(label, value);
+      select.appendChild(opt);
+      select.value = value;
+    } else {
+      select.value = '';
     }
   });
 }
@@ -188,6 +222,12 @@ function saveAssignment() {
   }
   
   const tabGroupId = document.getElementById('tabGroupSelect').value;
+  
+  // Stored config (group deleted) — assignment already saved, nothing to do
+  if (tabGroupId.startsWith('__stored__|')) {
+    showStatus('Assignment unchanged. Bookmark will open in saved group when used.', 'success');
+    return;
+  }
   
   // Check if creating a new tab group
   if (tabGroupId === '__create_new__') {
@@ -269,7 +309,15 @@ function clearAssignment() {
     return;
   }
   
-  document.getElementById('tabGroupSelect').value = '';
+  const select = document.getElementById('tabGroupSelect');
+  select.value = '';
+  
+  // Remove any "stored config" option (group deleted) since we're clearing
+  for (let i = select.options.length - 1; i >= 0; i--) {
+    if (select.options[i].value.startsWith('__stored__|')) {
+      select.remove(i);
+    }
+  }
   
   chrome.runtime.sendMessage({
     action: 'saveBookmarkTabGroup',
