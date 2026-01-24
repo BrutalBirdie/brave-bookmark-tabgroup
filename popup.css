@@ -231,6 +231,66 @@ h2 {
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
 }
 
+/* Color picker — horizontal row of circles (Brave/Chrome tab group style) */
+.color-picker-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-picker input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.color-chip {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+  transition: border-color 0.15s, transform 0.15s;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.color-chip:hover {
+  transform: scale(1.1);
+}
+
+.color-chip:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+.color-picker input:checked + .color-chip {
+  border-color: #333;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #333;
+}
+
+.color-chip[data-color="grey"] { background: #9aa0a6; }
+.color-chip[data-color="blue"] { background: #8ab4f8; }
+.color-chip[data-color="red"] { background: #f28b82; }
+.color-chip[data-color="yellow"] { background: #fdd663; }
+.color-chip[data-color="green"] { background: #81c995; }
+.color-chip[data-color="pink"] { background: #f8b4d9; }
+.color-chip[data-color="purple"] { background: #d7aefb; }
+.color-chip[data-color="cyan"] { background: #78d9ec; }
+.color-chip[data-color="orange"] { background: #fcad70; }
+
 /* Loading state */
 .loading {
   opacity: 0.6;

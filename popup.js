@@ -165,7 +165,8 @@ function handleTabGroupSelect(event) {
   } else {
     createSection.style.display = 'none';
     document.getElementById('newGroupName').value = '';
-    document.getElementById('newGroupColor').value = 'grey';
+    const greyRadio = document.getElementById('color-grey');
+    if (greyRadio) greyRadio.checked = true;
   }
 }
 
@@ -252,7 +253,7 @@ function saveAssignment() {
   // Check if creating a new tab group
   if (tabGroupId === '__create_new__') {
     const groupName = document.getElementById('newGroupName').value.trim();
-    const groupColor = document.getElementById('newGroupColor').value;
+    const groupColor = document.querySelector('input[name="newGroupColor"]:checked')?.value || 'grey';
     
     if (!groupName) {
       showStatus('Please enter a tab group name', 'error');
