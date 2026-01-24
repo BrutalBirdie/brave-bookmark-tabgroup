@@ -8,21 +8,7 @@ let currentBookmarkId = null;
 document.addEventListener('DOMContentLoaded', () => {
   loadBookmarks();
   loadTabGroups();
-  
-  // Check if opened from context menu
-  chrome.storage.local.get(['contextMenuBookmarkId'], (result) => {
-    if (result.contextMenuBookmarkId) {
-      // Pre-select the bookmark from context menu
-      setTimeout(() => {
-        const select = document.getElementById('bookmarkSelect');
-        select.value = result.contextMenuBookmarkId;
-        handleBookmarkSelect({ target: select });
-        // Clear the stored ID
-        chrome.storage.local.remove(['contextMenuBookmarkId']);
-      }, 500); // Wait for bookmarks to load
-    }
-  });
-  
+
   // Event listeners
   document.getElementById('bookmarkSelect').addEventListener('change', handleBookmarkSelect);
   document.getElementById('tabGroupSelect').addEventListener('change', (e) => {

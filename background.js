@@ -6,24 +6,7 @@ function dbg(...args) {
   if (DEBUG) console.log('[BTG]', ...args);
 }
 
-// Create context menu items
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: 'edit-bookmark-tabgroup',
-    title: 'Edit Tab Group Assignment',
-    contexts: ['bookmark']
-  });
-});
-
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'edit-bookmark-tabgroup' && info.bookmarkId) {
-    // Open popup with the selected bookmark
-    chrome.action.openPopup();
-    // Store the bookmark ID to pre-select it in popup
-    chrome.storage.local.set({ contextMenuBookmarkId: info.bookmarkId });
-  }
-});
+// Note: "bookmark" context menu was removed in MV3 — use the extension popup to assign tab groups.
 
 // Listen for bookmark creation/update to check if it should open in a tab group
 chrome.bookmarks.onCreated.addListener((id, bookmark) => {

@@ -38,13 +38,6 @@ A Brave Browser extension that allows you to assign bookmarks and bookmark folde
 3. Choose a tab group from the "Tab Group Assignment" dropdown
 4. Click "Save Assignment"
 
-### Using Context Menu
-
-1. Right-click on any bookmark in the bookmark bar
-2. Select "Edit Tab Group Assignment"
-3. The extension popup will open with that bookmark pre-selected
-4. Choose a tab group and save
-
 ### Opening Bookmarks
 
 - **Through Extension**: Select a bookmark in the popup and click "Open Selected Bookmark" or "Open Selected Folder"
@@ -71,7 +64,6 @@ This extension requires the following permissions:
 - **tabs**: To create tabs and manage tab groups
 - **tabGroups**: To access and manage tab groups
 - **storage**: To save bookmark-to-tab-group assignments
-- **contextMenus**: To add context menu options for bookmarks
 
 ## Development
 
