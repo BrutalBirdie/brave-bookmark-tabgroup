@@ -49,31 +49,73 @@ chrome.bookmarks.onRemoved.addListener((id, removeInfo) => {
 // Track processed tabs to avoid duplicate processing
 const processedTabs = new Set();
 
-// Function to assign tab to group based on bookmark
-async function assignTabToBookmarkGroup(tabId, url) {
-  // Skip if we've already processed this tab
-  if (processedTabs.has(tabId)) {
-    return;
+// Track first requested URL per tab. Used for bookmark lookup so we match the
+// bookmark URL even after redirects (e.g. git.cloudron.io -> git.cloudron.io/explore).
+const initialTabUrls = new Map();
+
+function isInternalUrl(url) {
+  return !url ||
+    url.startsWith('chrome://') ||
+    url.startsWith('chrome-extension://') ||
+    url.startsWith('brave://') ||
+    url === 'about:blank';
+}
+
+// Store initial URL only the first time we see a valid one for this tab. Returns true if stored.
+function captureInitialUrl(tabId, url) {
+  if (isInternalUrl(url)) return false;
+  if (initialTabUrls.has(tabId)) return false;
+  initialTabUrls.set(tabId, url);
+  return true;
+}
+
+// Short-lived cache (title|color -> { groupId, ts }) so we reuse a group when opening
+// a folder from the bookmark bar (multiple assignTabToBookmarkGroup calls in quick succession).
+const GROUP_CACHE_TTL_MS = 3000;
+const groupCache = new Map();
+
+function cacheGroupId(title, color, groupId) {
+  const key = `${title || ''}|${color || 'grey'}`;
+  groupCache.set(key, { groupId, ts: Date.now() });
+}
+
+function getCachedGroupId(title, color) {
+  const key = `${title || ''}|${color || 'grey'}`;
+  const ent = groupCache.get(key);
+  if (!ent || Date.now() - ent.ts > GROUP_CACHE_TTL_MS) {
+    if (ent) groupCache.delete(key);
+    return null;
   }
-  
-  // Skip chrome:// and extension pages
-  if (!url || 
-      url.startsWith('chrome://') || 
-      url.startsWith('chrome-extension://') ||
-      url.startsWith('brave://')) {
-    return;
+  return ent.groupId;
+}
+
+// Function to assign tab to group based on bookmark. Uses initial (pre-redirect) URL
+// when available so we match the bookmark even if the tab redirects (e.g. 302).
+async function assignTabToBookmarkGroup(tabId) {
+  if (processedTabs.has(tabId)) return;
+
+  let urlForLookup = initialTabUrls.get(tabId);
+  if (!urlForLookup) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (isInternalUrl(tab.url)) return;
+      urlForLookup = tab.url;
+      initialTabUrls.set(tabId, tab.url);
+    } catch (e) {
+      return;
+    }
   }
-  
+
   try {
     const result = await chrome.storage.local.get(['bookmarkTabGroups']);
     const bookmarkTabGroups = result.bookmarkTabGroups || {};
-    
-    // Find bookmark by URL
-    const bookmarks = await chrome.bookmarks.search({ url: url });
+
+    const bookmarks = await chrome.bookmarks.search({ url: urlForLookup });
     if (!bookmarks || bookmarks.length === 0) {
+      initialTabUrls.delete(tabId);
       return;
     }
-    
+
     // Check all matching bookmarks (in case of duplicates)
     for (const bookmark of bookmarks) {
       // Check if this bookmark has an assignment
@@ -98,7 +140,6 @@ async function assignTabToBookmarkGroup(tabId, url) {
             const groupResult = await findOrCreateTabGroup(tabGroupInfo.title, tabGroupInfo.color);
             
             if (groupResult && typeof groupResult === 'object' && groupResult.create) {
-              // Need to create group
               targetGroupId = await chrome.tabs.group({ tabIds: tabId });
               if (groupResult.title) {
                 await chrome.tabGroups.update(targetGroupId, {
@@ -106,6 +147,7 @@ async function assignTabToBookmarkGroup(tabId, url) {
                   color: groupResult.color
                 });
               }
+              cacheGroupId(tabGroupInfo.title, tabGroupInfo.color, targetGroupId);
             } else if (groupResult) {
               targetGroupId = groupResult;
               await chrome.tabs.group({ tabIds: tabId, groupId: targetGroupId });
@@ -122,24 +164,29 @@ async function assignTabToBookmarkGroup(tabId, url) {
             }
           }
           
-          // Mark as processed
           if (targetGroupId !== null) {
             processedTabs.add(tabId);
-            // Clean up after a delay
-            setTimeout(() => processedTabs.delete(tabId), 5000);
-            return; // Successfully assigned, exit
+            setTimeout(() => {
+              processedTabs.delete(tabId);
+              initialTabUrls.delete(tabId);
+            }, 5000);
+            return;
           }
         } else {
-          // Tab is already in a group, mark as processed
           processedTabs.add(tabId);
-          setTimeout(() => processedTabs.delete(tabId), 5000);
+          setTimeout(() => {
+            processedTabs.delete(tabId);
+            initialTabUrls.delete(tabId);
+          }, 5000);
           return;
         }
       }
     }
+    // No assignment found; clear initial URL so we don't hold it forever
+    initialTabUrls.delete(tabId);
   } catch (error) {
-    // Silently fail - this is a best-effort feature
     console.debug('Could not assign tab group:', error);
+    initialTabUrls.delete(tabId);
   }
 }
 
@@ -165,37 +212,44 @@ async function findFolderAssignment(folderId, bookmarkTabGroups) {
   return null;
 }
 
+// Delay (ms) before running assign. Keep short so we run before fast redirects (e.g. ~78ms).
+const ASSIGN_DELAY_MS = 25;
+
 // Listen for tab creation to catch bookmarks opened from bookmark bar
-chrome.tabs.onCreated.addListener(async (tab) => {
-  if (tab.url) {
-    // Small delay to ensure tab is fully initialized
-    setTimeout(() => {
-      assignTabToBookmarkGroup(tab.id, tab.url);
-    }, 100);
+chrome.tabs.onCreated.addListener((tab) => {
+  if (tab.url && captureInitialUrl(tab.id, tab.url)) {
+    setTimeout(() => assignTabToBookmarkGroup(tab.id), ASSIGN_DELAY_MS);
+    return;
   }
+  // No URL at creation (common); onUpdated will capture first real URL
+  setTimeout(() => assignTabToBookmarkGroup(tab.id), 80);
 });
 
-// Listen for tab updates to intercept bookmark opens (fallback)
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // Process when URL is available (loading or complete)
-  if (changeInfo.url || (changeInfo.status === 'loading' && tab.url) || (changeInfo.status === 'complete' && tab.url)) {
-    const url = changeInfo.url || tab.url;
-    if (url) {
-      // Small delay to ensure tab state is stable
-      setTimeout(() => {
-        assignTabToBookmarkGroup(tabId, url);
-      }, 200);
-    }
-  }
+// Listen for tab updates: capture first requested URL (before redirect) and assign
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const url = changeInfo.url || tab.url;
+  if (!url || isInternalUrl(url)) return;
+  if (!captureInitialUrl(tabId, url)) return; // already have initial URL
+  // First time we see this tab's URL – run quickly so we use it before redirect
+  setTimeout(() => assignTabToBookmarkGroup(tabId), ASSIGN_DELAY_MS);
 });
 
 // Helper function to find or create a tab group by title and color
 async function findOrCreateTabGroup(title, color) {
   try {
-    // First, try to find an existing group with matching title and color
+    const cached = getCachedGroupId(title, color);
+    if (cached != null) {
+      try {
+        await chrome.tabGroups.get(cached);
+        return cached;
+      } catch (e) {
+        groupCache.delete(`${title || ''}|${color || 'grey'}`);
+      }
+    }
+    
     const allGroups = await chrome.tabGroups.query({});
-    const matchingGroup = allGroups.find(g => 
-      (g.title === title || (!g.title && !title)) && 
+    const matchingGroup = allGroups.find(g =>
+      (g.title === title || (!g.title && !title)) &&
       g.color === color
     );
     
@@ -203,8 +257,6 @@ async function findOrCreateTabGroup(title, color) {
       return matchingGroup.id;
     }
     
-    // Group doesn't exist, we'll need to create it when we have a tab
-    // Return a marker object to indicate we need to create it
     return { create: true, title: title, color: color };
   } catch (error) {
     console.error('Error finding tab group:', error);
@@ -286,29 +338,34 @@ async function openBookmarkFolderInTabGroups(folderId) {
     const result = await chrome.storage.local.get(['bookmarkTabGroups']);
     const bookmarkTabGroups = result.bookmarkTabGroups || {};
     
-    // Check if the folder itself has a tab group assignment
     const folderTabGroupInfo = bookmarkTabGroups[folderId];
+    // Reuse this groupId for subsequent bookmarks in the same folder to avoid
+    // findOrCreateTabGroup races (second lookup sometimes missing the new group).
+    let folderGroupId = null;
     
     for (const bookmark of bookmarks) {
       if (bookmark.url) {
-        // It's a bookmark (not a folder)
-        // Check if this specific bookmark has an assignment, otherwise use folder assignment
-        const bookmarkTabGroupInfo = bookmarkTabGroups[bookmark.id] || folderTabGroupInfo;
+        const bookmarkInfo = bookmarkTabGroups[bookmark.id];
+        const info = bookmarkInfo || folderTabGroupInfo;
         
-        if (bookmarkTabGroupInfo) {
-          // Open bookmark with the appropriate tab group info
-          // We'll pass the tab group info directly instead of relying on storage
-          await openBookmarkInTabGroupWithInfo(bookmark.url, bookmarkTabGroupInfo);
+        if (info) {
+          const useFolderGroup = !bookmarkInfo && folderTabGroupInfo;
+          const reusedId = useFolderGroup ? folderGroupId : null;
+          const usedGroupId = await openBookmarkInTabGroupWithInfo(
+            bookmark.url,
+            info,
+            reusedId
+          );
+          if (useFolderGroup && usedGroupId) {
+            folderGroupId = usedGroupId;
+          }
         } else {
-          // No assignment, open normally
           await chrome.tabs.create({ url: bookmark.url });
+          folderGroupId = null;
         }
       } else {
-        // It's a folder, recursively open its children
-        // Pass down the folder's tab group info if it exists
         const childFolderTabGroupInfo = bookmarkTabGroups[bookmark.id] || folderTabGroupInfo;
         if (childFolderTabGroupInfo) {
-          // Temporarily store it for the recursive call
           bookmarkTabGroups[bookmark.id] = childFolderTabGroupInfo;
         }
         await openBookmarkFolderInTabGroups(bookmark.id);
@@ -319,56 +376,63 @@ async function openBookmarkFolderInTabGroups(folderId) {
   }
 }
 
-// Helper function to open a bookmark with specific tab group info
-async function openBookmarkInTabGroupWithInfo(url, tabGroupInfo) {
+// Helper function to open a bookmark with specific tab group info.
+// Returns the groupId used (or null). Pass existingGroupId when opening a folder
+// to reuse the same group for multiple bookmarks and avoid findOrCreate races.
+async function openBookmarkInTabGroupWithInfo(url, tabGroupInfo, existingGroupId = null) {
+  let tab;
   try {
-    // Create a new tab first
-    const tab = await chrome.tabs.create({ url: url, active: false });
-    
-    let targetGroupId = null;
+    tab = await chrome.tabs.create({ url: url, active: false });
+  } catch (e) {
+    console.error('Error creating tab:', e);
+    return null;
+  }
+  
+  let targetGroupId = null;
+  
+  try {
+    if (existingGroupId != null) {
+      targetGroupId = existingGroupId;
+      await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
+      return targetGroupId;
+    }
     
     if (typeof tabGroupInfo === 'object' && tabGroupInfo.title !== undefined) {
-      // New format: find or create group by title and color
       const groupResult = await findOrCreateTabGroup(tabGroupInfo.title, tabGroupInfo.color);
       
       if (groupResult && typeof groupResult === 'object' && groupResult.create) {
-        // Need to create a new group
         targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
-        // Set the title and color
         if (groupResult.title) {
-          await chrome.tabGroups.update(targetGroupId, { 
+          await chrome.tabGroups.update(targetGroupId, {
             title: groupResult.title,
-            color: groupResult.color 
+            color: groupResult.color
           });
         }
+        cacheGroupId(tabGroupInfo.title, tabGroupInfo.color, targetGroupId);
       } else if (groupResult) {
-        // Found existing group
         targetGroupId = groupResult;
         await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
       } else {
-        // Fallback: create group without assignment
         targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
       }
     } else if (typeof tabGroupInfo === 'number') {
-      // Old format: try to use the stored ID
       try {
         const group = await chrome.tabGroups.get(tabGroupInfo);
         if (group) {
           targetGroupId = tabGroupInfo;
           await chrome.tabs.group({ tabIds: tab.id, groupId: targetGroupId });
         } else {
-          // Group doesn't exist, create new one
           targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
         }
       } catch (error) {
-        // Group ID invalid, create new one
         targetGroupId = await chrome.tabs.group({ tabIds: tab.id });
       }
     }
+    return targetGroupId;
   } catch (error) {
     console.error('Error opening bookmark in tab group:', error);
-    // Fallback to normal tab creation
-    chrome.tabs.create({ url: url });
+    // Tab already exists; do not create another. Leave it ungrouped.
+    return null;
   }
 }
 
