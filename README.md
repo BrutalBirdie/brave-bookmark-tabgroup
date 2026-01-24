@@ -19,7 +19,6 @@ A Browser extension that allows you to assign bookmarks and bookmark folders to 
 - **Automatic Tab Group Assignment**: When you open a bookmark, it automatically opens in its assigned tab group
 - **Folder Support**: Assign entire bookmark folders to tab groups - all bookmarks in the folder will open in the assigned group
 - **Easy Management**: Use the extension popup to manage all your bookmark-to-tab-group assignments
-- **Context Menu Integration**: Right-click on any bookmark in the bookmark bar to quickly edit its tab group assignment
 
 ## Installation
 
@@ -64,7 +63,6 @@ The Firefox build uses `manifest.firefox.json` (same content as `manifest.json` 
 
 - **Through Extension**: Select a bookmark in the popup and click "Open Selected Bookmark" or "Open Selected Folder"
 - **Through Bookmark Bar**: Click any bookmark normally - if it has a tab group assignment, it will automatically open in that group
-- **Note**: Automatic assignment when clicking bookmarks from the bookmark bar works best when the tab group already exists
 
 ### Clearing Assignments
 
