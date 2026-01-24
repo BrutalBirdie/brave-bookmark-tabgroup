@@ -9,6 +9,9 @@ A Brave Browser extension that allows you to assign bookmarks and bookmark folde
 > I have no knowledge about browser extension development and simply wanted/needed this feature.
 > Do not expect any support for this project.
 
+## YouTube Demo - Click Me
+
+[![Demo Video](demo-bookmark-tab-group-manager.webp)](https://youtu.be/Kvi67eTfrRk)
 
 ## Features
 
