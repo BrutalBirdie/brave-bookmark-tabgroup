@@ -490,58 +490,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
-  if (request.action === 'createTabGroup') {
-    // Create a new tab group with the specified name and color
-    // Tab groups require at least one tab, so we'll create a temporary placeholder tab
-    (async () => {
-      try {
-        // Create a temporary placeholder tab (required for group creation)
-        // This tab will stay open - user can close it manually if desired
-        const tempTab = await chrome.tabs.create({ 
-          url: 'about:blank',
-          active: false 
-        });
-        
-        // Create the group with the tab
-        const groupId = await chrome.tabs.group({ tabIds: tempTab.id });
-        
-        // Update the group with title and color
-        await chrome.tabGroups.update(groupId, {
-          title: request.title || '',
-          color: request.color || 'grey'
-        });
-        
-        // Note: We keep the temporary tab open because empty tab groups are automatically removed
-        // The user can close this tab manually if they want, or it will be used when opening bookmarks
-        
-        sendResponse({ success: true, tabGroupId: groupId });
-      } catch (error) {
-        console.error('Error creating tab group:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true; // Keep the message channel open for async response
-  }
-  
   if (request.action === 'saveBookmarkTabGroup') {
     chrome.storage.local.get(['bookmarkTabGroups'], async (result) => {
       const bookmarkTabGroups = result.bookmarkTabGroups || {};
       if (request.tabGroupId) {
-        // Get the tab group details to store title and color (persistent identifiers)
         try {
           const group = await chrome.tabGroups.get(request.tabGroupId);
           if (group) {
-            // Store by title and color instead of ID (persistent across sessions)
             bookmarkTabGroups[request.bookmarkId] = {
               title: group.title || '',
               color: group.color || 'grey'
             };
           } else {
-            // Fallback: store the ID if we can't get group details
             bookmarkTabGroups[request.bookmarkId] = request.tabGroupId;
           }
         } catch (error) {
-          // If group doesn't exist, try to get it from the request if provided
           if (request.tabGroupTitle !== undefined) {
             bookmarkTabGroups[request.bookmarkId] = {
               title: request.tabGroupTitle || '',
@@ -551,6 +514,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             bookmarkTabGroups[request.bookmarkId] = request.tabGroupId;
           }
         }
+      } else if (request.tabGroupTitle !== undefined) {
+        // Virtual group (Create New): store by title+color only, no tab/group created
+        bookmarkTabGroups[request.bookmarkId] = {
+          title: request.tabGroupTitle || '',
+          color: request.tabGroupColor || 'grey'
+        };
       } else {
         delete bookmarkTabGroups[request.bookmarkId];
       }

@@ -192,6 +192,17 @@ function loadCurrentAssignment() {
     // We have stored config (title/color)
     if (response.tabGroupInfo) {
       const info = response.tabGroupInfo;
+      const emptyConfig = (!info.title || info.title === '') && (!info.color || info.color === 'grey');
+      if (emptyConfig) {
+        select.value = '';
+        updateSelectTitle(select);
+        chrome.runtime.sendMessage({
+          action: 'saveBookmarkTabGroup',
+          bookmarkId: currentBookmarkId,
+          tabGroupId: null
+        });
+        return;
+      }
       const matchingGroup = allTabGroups.find(g =>
         (g.title === info.title || (!g.title && !info.title)) &&
         g.color === info.color
@@ -247,40 +258,27 @@ function saveAssignment() {
       return;
     }
     
-    // Create the new tab group
+    // Store as virtual group (title+color only). No tab/group created; group
+    // is created when the bookmark is opened, same as when a saved group was deleted.
     chrome.runtime.sendMessage({
-      action: 'createTabGroup',
-      title: groupName,
-      color: groupColor
+      action: 'saveBookmarkTabGroup',
+      bookmarkId: currentBookmarkId,
+      tabGroupId: null,
+      tabGroupTitle: groupName,
+      tabGroupColor: groupColor
     }, (response) => {
-      if (response && response.success && response.tabGroupId) {
-        // Now save the assignment with the new group
-        chrome.runtime.sendMessage({
-          action: 'saveBookmarkTabGroup',
-          bookmarkId: currentBookmarkId,
-          tabGroupId: response.tabGroupId,
-          tabGroupTitle: groupName,
-          tabGroupColor: groupColor
-        }, (saveResponse) => {
-          if (saveResponse && saveResponse.success) {
-            const bookmark = allBookmarks.find(b => b.id === currentBookmarkId);
-            showStatus(`Saved! "${bookmark.title}" will open in "${groupName}"`, 'success');
-            // Reload tab groups and select the new one
-            setTimeout(() => {
-              loadTabGroups();
-              setTimeout(() => {
-                const tgSelect = document.getElementById('tabGroupSelect');
-                tgSelect.value = response.tabGroupId;
-                updateSelectTitle(tgSelect);
-                document.getElementById('createGroupSection').style.display = 'none';
-              }, 100);
-            }, 200);
-          } else {
-            showStatus('Error saving assignment', 'error');
-          }
-        });
+      if (response && response.success) {
+        const bookmark = allBookmarks.find(b => b.id === currentBookmarkId);
+        showStatus(`Saved! "${bookmark.title}" will open in "${groupName}"`, 'success');
+        document.getElementById('createGroupSection').style.display = 'none';
+        document.getElementById('newGroupName').value = '';
+        const greyRadio = document.getElementById('color-grey');
+        if (greyRadio) greyRadio.checked = true;
+        const tgSelect = document.getElementById('tabGroupSelect');
+        tgSelect.value = '';
+        loadTabGroups();
       } else {
-        showStatus('Error creating tab group: ' + (response?.error || 'Unknown error'), 'error');
+        showStatus('Error saving assignment', 'error');
       }
     });
     return;
