@@ -1,0 +1,14 @@
+{
+  "name": "bookmark-tab-group-manager",
+  "version": "1.0.0",
+  "description": "Open bookmarks in specific tab groups. Edit bookmarks to assign them to tab groups.",
+  "private": true,
+  "scripts": {
+    "prebuild:firefox": "cp manifest.json .manifest.chrome.bak && cp manifest.firefox.json manifest.json",
+    "build:firefox": "web-ext build --overwrite-dest",
+    "postbuild:firefox": "mv .manifest.chrome.bak manifest.json"
+  },
+  "devDependencies": {
+    "web-ext": "^9.2.0"
+  }
+}

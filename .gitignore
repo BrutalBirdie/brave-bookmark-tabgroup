@@ -16,6 +16,7 @@ node_modules/
 *.zip
 *.crx
 *.pem
+web-ext-artifacts/
 
 # Temporary files
 *.log

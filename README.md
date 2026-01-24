@@ -23,14 +23,33 @@ A Brave Browser extension that allows you to assign bookmarks and bookmark folde
 
 ## Installation
 
-### From Source
+### From Source (Brave / Chrome / Chromium Bases Browsers)
 
 1. Clone or download this repository
 2. Open Brave Browser
-3. Navigate to `brave://extensions/`
+3. Navigate to `chrome://extensions/`
 4. Enable "Developer mode" (toggle in the top right)
 5. Click "Load unpacked"
 6. Select the folder containing this extension
+
+### Bundle for Firefox
+
+The extension works in **Firefox 138+** (tab groups API). To build an installable package:
+
+1. Install [Node.js](https://nodejs.org/) (LTS).
+2. From the project root, run:
+   ```bash
+   npm install
+   npm run build:firefox
+   ```
+3. The built extension is created in `web-ext-artifacts/` as a `.zip` file.
+4. In Firefox, go to `about:debugging` → **This Firefox** → **Load Temporary Add-on** → choose the `.zip` from `web-ext-artifacts/`, or **about:addons** → gear icon → **Install Add-on From File** → select the `.zip` for a permanent install.
+
+The Firefox build uses `manifest.firefox.json` (same content as `manifest.json` but with `background.scripts` instead of `background.service_worker`), because Firefox does not yet support MV3 service workers. The build script swaps manifests temporarily; `manifest.json` remains the Chrome/Brave version for normal development. `browser_specific_settings` is ignored by Chromium-based browsers.
+
+**If you get “This add-on could not be installed because it appears to be corrupt”:** The build excludes dev artifacts (`.pem`, `.crx`, `package.json`, etc.) via `web-ext-config.cjs`. Use the zip from `web-ext-artifacts/` after `npm run build:firefox`, and **Firefox 138 or newer**. You can also try **Load Temporary Add-on** or set `xpinstall.signatures.required` to `false` in `about:config` (Developer Edition).
+
+**If you get “background.service_worker is currently disabled. Add background.scripts”:** Use the zip produced by `npm run build:firefox` (not a hand-made zip). The build uses `manifest.firefox.json`, which specifies `background.scripts` for Firefox compatibility.
 
 ## Usage
 
