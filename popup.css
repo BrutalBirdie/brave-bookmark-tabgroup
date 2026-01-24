@@ -13,6 +13,8 @@ body {
 
 .container {
   padding: 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 h1 {
@@ -35,6 +37,8 @@ h2 {
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bookmark-selector,
@@ -42,17 +46,23 @@ h2 {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bookmark-select,
 .tabgroup-select {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 13px;
   background: white;
   color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bookmark-select:focus,
